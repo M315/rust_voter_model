@@ -35,12 +35,12 @@ fn main() -> Result<(), String> {
         .expect("Unable to initialize the video system");
 
     // Set initial parameters
-    let width : u32 = 800;
-    let height : u32 = 800;
+    let width : u32 = 100;
+    let height : u32 = 100;
 
     // Set point size
-    let w_rec : u32 = 1;
-    let h_rec : u32 = 1;
+    let w_rec : u32 = 4;
+    let h_rec : u32 = 4;
 
     // Generate a window
     let window = video_subsystem
@@ -65,8 +65,9 @@ fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     // Initialize the random genreators
-    let uni = Uniform::from(0..width);
     let ber = Bernoulli::new(0.5).expect("Couldn't generate bernoulli random variable");
+    let uni = Uniform::from(0..height as usize);
+    let mut rng = rand::thread_rng();
 
     // Initialize state at time 0
     let mut t : u64 = 0;
@@ -78,7 +79,7 @@ fn main() -> Result<(), String> {
 
     // Set last column to state 0
     //board[width as usize - 1] = state;
-    board[0] = state;
+    board[0] = state.to_vec();
 
     // Video/Game loop
     'running: loop {
@@ -96,17 +97,22 @@ fn main() -> Result<(), String> {
 
         // Generate next state and update board
         t += 1;
-        state = rand::thread_rng().sample_iter(&ber).take(height as usize).collect();
-        board.push(state);
+        let i : usize = uni.sample(&mut rng);
+        let n : bool = rng.sample(ber);
+        if n {
+            state[i] = state[(height as usize + i - 1) % height as usize];
+        } else {
+            state[i] = state[(height as usize +  i + 1) % height as usize];
+        }
+        board.push(state.to_vec());
 
         render_board(&mut canvas, &board, (t - shift) as usize, width as usize, height as usize, w_rec, h_rec)?;
 
         // TODO: Trim board
         if board.len() > 2 * width as usize {
-            //shift += width as u64;
-            break 'running;
+            board.drain(0..width as usize);
+            shift += width as u64;
         }
-        println!("{}", t);
     }
     Ok(())
 }
