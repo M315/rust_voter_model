@@ -1,29 +1,38 @@
 use rand::distributions::{Uniform, Bernoulli};
 use rand::prelude::*;
+use rand::seq::SliceRandom;
+
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
+
 use std::time::Duration;
 
-// TODO: Improve render
-fn render_board(canvas: &mut Canvas<Window>, board: &Vec<Vec<bool>>, first_col : usize, width: usize, height: usize, w_rec: u32, h_rec: u32) -> Result<(), String> {
+fn render_state(canvas: &mut Canvas<Window>, board: &Vec<Vec<bool>>, width: usize, height: usize, w_rec: u32, h_rec: u32) -> Result<(), String> {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
     canvas.set_draw_color(Color::RGB(255, 255, 255));
     for i in 0..width {
         for j in 0..height {
-            if board[i + first_col][j] {
+            if board[i][j] {
                 canvas.fill_rect(Rect::new((i * w_rec as usize) as i32, (j * h_rec as usize) as i32, w_rec, h_rec))?;
             }
         }
     }
     canvas.present();
 
-    ::std::thread::sleep(Duration::new(0u64,  1_000_000u32));
+    Ok(())
+}
+
+fn render_rec(canvas: &mut Canvas<Window>, x: i32, y: i32, color: Color, w_rec: u32, h_rec: u32) -> Result<(), String> {
+    canvas.set_draw_color(color);
+    canvas.fill_rect(Rect::new((x * w_rec as i32) as i32, (y * h_rec as i32) as i32, w_rec, h_rec))?;
+    canvas.present();
+
     Ok(())
 }
 
@@ -71,15 +80,14 @@ fn main() -> Result<(), String> {
 
     // Initialize state at time 0
     let mut t : u64 = 0;
-    let mut state : Vec<bool> = rand::thread_rng().sample_iter(ber).take(height as usize).collect();
+    let mut state : Vec<Vec<bool>> = Vec::new();
+    
+    for _ in 0..width as usize {
+        let col : Vec<bool> = rand::thread_rng().sample_iter(ber).take(height as usize).collect();
+        state.push(col);
+    }
 
-    // Initialize empty board
-    let mut board : Vec<Vec<bool>> = vec![vec![false; height as usize]; width as usize];
-    let mut shift : u64 = 0;
-
-    // Set last column to state 0
-    //board[width as usize - 1] = state;
-    board[0] = state.to_vec();
+    render_state(&mut canvas, &state, width as usize, height as usize, w_rec, h_rec)?;
 
     // Video/Game loop
     'running: loop {
@@ -97,23 +105,27 @@ fn main() -> Result<(), String> {
 
         // Generate next state and update board
         t += 1;
-        let i : usize = uni.sample(&mut rng);
-        let n : bool = rng.sample(ber);
-        if n {
-            state[i] = state[(height as usize + i - 1) % height as usize];
-        } else {
-            state[i] = state[(height as usize +  i + 1) % height as usize];
+
+        let site : Vec<usize> = uni.sample_iter(&mut rng).take(2).collect();
+        let dir : (i32, i32) = *[(1, 0), (0, 1), (-1, 0), (0, -1)].choose(&mut rng).expect("Couldn't choose");
+        let neighbor : (usize, usize) = (
+            (width as i32 + site[0] as i32 + dir.0) as usize % width as usize,
+            (height as i32 + site[1] as i32 + dir.1) as usize % height as usize
+        );
+        state[site[0]][site[1]] = state[neighbor.0][neighbor.1];
+
+        let mut color : Color = Color::RGB(255, 255, 255);
+        if state[neighbor.0][neighbor.1] {
+            color = Color::RGB(0, 0, 0);
         }
-        board.push(state.to_vec());
 
-        render_board(&mut canvas, &board, (t - shift) as usize, width as usize, height as usize, w_rec, h_rec)?;
-
-        // TODO: Trim board
-        if board.len() > 2 * width as usize {
-            board.drain(0..width as usize);
-            shift += width as u64;
+        if t % 1_000 == 0 {
+            render_rec(&mut canvas, site[0] as i32, site[1] as i32, color, w_rec, h_rec)?;
         }
     }
+
+    println!("{}", t);
+
     Ok(())
 }
 
